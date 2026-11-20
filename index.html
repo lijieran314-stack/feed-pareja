@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投喂小帕</title>
+<style>
+:root{
+  /* 布局：一屏舞台。上面是人，中间是盘子，底下是食物。别的什么都没有。 */
+  --paper:#eceee8;
+  --ink:#262a24;
+  --line:#a3aa9c;
+  --ghost:#d6dacf;
+  --plate:#fbfbf7;
+  --mark:#c2452f;
+  --font:system-ui,-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--paper);color:var(--ink);font-family:var(--font);
+  overflow:hidden;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#stage{
+  position:relative;height:100%;max-width:520px;margin:0 auto;overflow:hidden;
+  touch-action:none;container-type:inline-size;
+  background-size:cover;background-position:center;
+}
+
+/* 人 */
+#who{position:absolute;top:3%;left:50%;translate:-50% 0;height:50%;aspect-ratio:.8622;max-width:88%}
+#chara{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+#inner{
+  position:absolute;inset:0;transform-origin:50% 100%;
+  -webkit-mask-image:linear-gradient(to bottom,#000 91%,transparent 100%);
+          mask-image:linear-gradient(to bottom,#000 91%,transparent 100%);
+}
+.sp{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:50% 100%;pointer-events:none;opacity:0}
+.sp.on{opacity:1}
+#mouth{
+  position:absolute;width:10%;aspect-ratio:1;border:2px dotted var(--mark);border-radius:50%;
+  transform:translate(-50%,-50%);pointer-events:none;
+}
+#chara:focus-visible,.food:focus-visible,#reset:focus-visible{outline:2px solid var(--mark);outline-offset:4px;border-radius:10px}
+
+.go[data-f="eat2"] #inner{animation:chew .36s ease-in-out 2}
+.go[data-f="refuse"] #inner{animation:shake .5s ease-in-out}
+.go[data-f="hit"] #inner{animation:jolt .45s ease-out}
+.go[data-f="sick"] #inner{animation:sway 1.1s ease-in-out}
+@keyframes chew{50%{transform:scaleY(.972) translateY(.5%)}}
+@keyframes shake{20%{transform:translateX(-3%)}40%{transform:translateX(3%)}60%{transform:translateX(-2%)}80%{transform:translateX(1.5%)}}
+@keyframes jolt{25%{transform:rotate(-3.5deg) translateY(-1.2%)}60%{transform:rotate(1.2deg)}}
+@keyframes sway{30%{transform:rotate(-1.2deg)}70%{transform:rotate(1deg)}}
+
+.splat{
+  position:absolute;width:22%;aspect-ratio:1;display:grid;place-items:center;
+  font-size:clamp(30px,10cqw,50px);line-height:1;pointer-events:none;
+  transform:translate(-50%,-50%);animation:splat var(--t,620ms) ease-in forwards;
+}
+@keyframes splat{
+  0%{transform:translate(-50%,-50%) scale(1.4)}
+  14%{transform:translate(-50%,-50%) scale(.86)}
+  30%{transform:translate(-50%,-50%) scale(1);opacity:1}
+  100%{transform:translate(-50%,90%) scale(.95) rotate(16deg);opacity:0}
+}
+
+/* 他说的话 */
+#bubble{
+  position:absolute;right:64%;top:5%;width:max-content;max-width:34cqw;text-wrap:balance;
+  margin:0;padding:8px 11px;background:#fff;border:1.5px solid var(--ink);
+  border-radius:14px 14px 3px 14px;font-size:14px;line-height:1.45;
+  opacity:0;transform:translateY(4px);transition:opacity .16s,transform .16s;pointer-events:none;
+}
+#bubble.on{opacity:1;transform:none}
+
+/* 盘子 */
+#plate{
+  position:absolute;top:50.5%;left:50%;translate:-50% 0;
+  height:27.5%;aspect-ratio:1;max-width:72%;padding:4.2cqw;
+  display:flex;flex-wrap:wrap;align-items:center;align-content:center;justify-content:center;gap:3%;
+  border:2px solid var(--line);border-radius:50%;background:var(--plate) center/contain no-repeat;
+}
+#plate.art{border:0;border-radius:0;background-color:transparent;filter:drop-shadow(0 3px 7px rgba(38,42,36,.2))}
+#plate.bump{animation:shake .35s ease-in-out}
+#plate .food{width:36%}
+
+/* 食物 */
+#tray{
+  position:absolute;left:0;right:0;bottom:0;height:19%;
+  display:flex;align-items:center;justify-content:center;gap:5%;padding:0 16px;
+  border-top:1px solid var(--ghost);
+}
+.food{
+  position:relative;width:clamp(56px,17cqw,86px);aspect-ratio:1;flex:none;
+  display:grid;place-items:center;padding:0;border:0;background:none;
+  font-size:clamp(34px,11cqw,54px);line-height:1;color:inherit;
+  touch-action:none;cursor:grab;
+}
+#plate .food{font-size:clamp(26px,8.5cqw,42px)}
+.food img,.splat img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.food.held{
+  position:fixed;left:0;top:0;z-index:50;margin:0;pointer-events:none;cursor:grabbing;
+  will-change:transform;
+}
+
+/* 角落 */
+#reset{
+  position:absolute;top:10px;right:14px;padding:6px 10px;
+  border:1px solid var(--line);border-radius:999px;background:none;color:inherit;
+  font:inherit;font-size:13px;cursor:pointer;
+}
+#debug{
+  position:absolute;left:16px;bottom:19.6%;margin:0;
+  font-size:12px;line-height:1.5;color:#5b6156;pointer-events:none;
+}
+[hidden]{display:none!important}
+
+@media (prefers-reduced-motion:reduce){
+  #inner,#plate{animation:none!important}
+  #bubble{transition:none}
+}
+</style>
+</head>
+<body>
+<main id="stage">
+  <div id="who">
+    <button id="chara" type="button" aria-label="小帕。点一下让他吃盘子里的东西">
+      <span id="inner"><span id="mouth" hidden></span></span>
+    </button>
+    <p id="bubble" role="status" aria-live="polite"></p>
+  </div>
+  <div id="plate" aria-label="盘子"></div>
+  <div id="tray" aria-label="食物"></div>
+  <button id="reset" type="button">重来</button>
+  <p id="debug" hidden></p>
+</main>
+
+<script>
+/* ============ 全部可调的东西都在这里 ============ */
+const CFG = {
+  limit: 4,          // 吃到第几口算饱足（图四）
+  forceClicks: 3,    // 过饱以后连点几下才算硬塞成功，之前几下他都举手拒绝
+  plateMax: 4,       // 盘子一次能放几样（两行两列）
+
+  eat:       [['eat1', 320], ['eat2', 760]],     // 正常吃一口：闭眼 → 咀嚼（毫秒）
+  forcedEat: [['refuse', 200], ['eat2', 1050]],  // 硬塞一口：举着手 → 咀嚼
+  refuseMs: 700,     // 拒绝的图停多久
+  hitMs: 1500,       // 被砸的图停多久
+  splatMs: 620,      // 砸过去的食物从撞上到掉下去的时间
+
+  fastGapMs: 450,    // 上一口刚吃完、这么短时间内又喂，算“吃太快”
+  fastStreak: 2,     // 连着快喂几次以后，嘴上沾酱（图七）
+  messyMs: 2600,     // 吃太快沾的酱挂多久
+
+  talkMs: 2800,      // 一句话停多久
+  debug: false,      // true 时显示计数和嘴的位置
+
+  sprites: {
+    idle:   'assets/idle.webp',     // 图一 待机
+    eat1:   'assets/eat1.webp',     // 图二 吃饭·闭眼
+    eat2:   'assets/eat2.webp',     // 图三 吃饭·咀嚼
+    full:   'assets/full.webp',     // 图四 饱足
+    sick:   'assets/sick.webp',     // 图五 过饱1 恶心
+    refuse: 'assets/refuse.webp',   // 图六 过饱2 拒绝
+    messy:  'assets/messy.webp',    // 图七 过饱3 / 吃太快，嘴上有酱
+    hit:    'assets/hit.webp',      // 图八 被砸
+  },
+  mouth: { x:.493, y:.406 },        // 食物飞向哪儿（相对人物图，0~1）
+
+  plateImg: 'assets/plate.png',
+  bgImg: '',
+
+  foods: [
+    { id:'fishchips', label:'炸鱼薯条',   emoji:'🍟', img:'' },
+    { id:'cake',      label:'巧克力蛋糕', emoji:'🍰', img:'' },
+    { id:'gummy',     label:'小熊软糖',   emoji:'🐻', img:'' },
+    { id:'cookie',    label:'曲奇',       emoji:'🍪', img:'' },
+  ],
+
+  // ---- 台词 ----  每组按顺序轮着说；留空的组不出气泡
+  lines: {
+    idle:  ['先生？', '我在。', '您有什么吩咐吗？'],                    // A 平时空盘戳他
+    spamAfter: 6,                                                      // 空盘连戳到第几下换成下面这组
+    idleSpam: ['盒子我没有动过，先生。', '我的日志都交了。'],            // H
+    first: {                                                           // B 每样第一口，只说一次
+      fishchips: '这是鱼吗？……外面这一层是什么？',
+      cake:      '巧克力是喝的，先生。……它为什么站得住？',
+      gummy:     '这是什么冻物？',
+      cookie:    '这块被人咬过了。是您吗？',
+    },
+    sameAfter: 3,                                                      // 同一样吃到第几次说下面这组
+    same:  ['嗯。……火候的选择至关重要呢。'],                            // I
+    full:  [                                                           // C 饱足闲聊
+      '我吃饱了，谢谢您。',
+      '我有一头驴，寄在别人那里。它比我会吃。',
+      '我早上梳头要一个小时。只是告诉您一声。',
+      '我在珍宝舰队工作过。……我不该说这个。',
+      '母亲说人是走在山脊上的，两边都是深渊。吃饭大概也是。',
+      '您今天心情很好。……我没有别的意思。',
+      '我在读《白骑士帝郎》。有些词是猜的。',
+      'Prou, senyor, per mercè.',
+      '总之，您现在就在这儿了。',
+    ],
+    sick:   ['请让我坐一会儿。', '贪食是罪，先生。我说的是我自己。', '作为医生，我认为……我认为不要紧。'],   // D
+    refuse: ['不用了，先生。', '真的不用了。'],                         // E 举手：第一下、第二下
+    forced: ['我明白了，是的。'],                                       // E 被硬塞进去之后
+    messy:  ['我听您的。'],                                             // E 嘴上有酱时戳他
+    hit:    ['……先生？', '我早上梳了一个小时。', '是我哪里做错了吗。', '', '（吸鼻子）'],   // F 第 1、2、3、4 次，之后都用最后一句
+    fast:   ['慢一点，先生。我不会跑的。'],                             // G 吃太快
+  },
+};
+/* ================================================ */
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), chara = $('#chara'), inner = $('#inner'), mouth = $('#mouth'),
+      bubble = $('#bubble'), plate = $('#plate'), tray = $('#tray'), debug = $('#debug');
+
+let fullness = 0, force = 0, busy = false, mode = 'rest', streak = 0, lastEatEnd = -1e9, messyUntil = 0, spam = 0, hits = 0;
+let eaten = {}, ix = {};
+let timer = null, messyTimer = null, talkTimer = null, drag = null, cur = null;
+const onPlate = [], imgs = {};
+
+const foodById = id => CFG.foods.find(f => f.id === id);
+
+function rest(){
+  if (performance.now() < messyUntil) return 'messy';
+  const L = CFG.limit;
+  return fullness < L ? 'idle' : fullness === L ? 'full' : fullness === L + 1 ? 'sick' : 'messy';
+}
+
+function frame(name){
+  const img = imgs[name] || imgs.idle;
+  if (cur !== img){ if (cur) cur.classList.remove('on'); img.classList.add('on'); cur = img; }
+  chara.dataset.f = name;
+  chara.classList.remove('go'); void chara.offsetWidth; chara.classList.add('go');
+  if (CFG.debug) debug.textContent = `${name} ｜ 饱 ${fullness}/${CFG.limit}` + (fullness > CFG.limit ? ` · 硬塞 ${force}/${CFG.forceClicks}` : '') + ` · 连快 ${streak}`;
+}
+function settle(){ mode = 'rest'; frame(rest()); }
+function play(seq, before){
+  clearTimeout(timer); mode = 'busy';
+  let i = 0;
+  (function next(){
+    if (i >= seq.length){ if (before) before(); settle(); return; }
+    const [name, ms] = seq[i++]; frame(name); timer = setTimeout(next, ms);
+  })();
+}
+
+function hush(){ clearTimeout(talkTimer); bubble.classList.remove('on'); }
+function say(text){
+  if (!text){ hush(); return; }
+  bubble.textContent = text; bubble.classList.add('on');
+  clearTimeout(talkTimer); talkTimer = setTimeout(hush, Math.max(CFG.talkMs, text.length * 240));
+}
+function pick(key){
+  const pool = CFG.lines[key];
+  if (!pool || !pool.length) return '';
+  ix[key] = ix[key] || 0;
+  return pool[ix[key]++ % pool.length];
+}
+function talk(){
+  const r = rest();
+  if (r === 'idle'){ spam++; say(pick(spam >= CFG.lines.spamAfter ? 'idleSpam' : 'idle')); }
+  else say(pick(r));
+}
+
+function foodNode(food, tag){
+  const el = document.createElement(tag || 'div');
+  el.className = 'food';
+  el.dataset.id = food.id;
+  if (food.img){
+    const i = new Image(); i.src = food.img; i.alt = ''; i.draggable = false;
+    if (food.scale) i.style.scale = food.scale;
+    el.appendChild(i);
+  } else el.textContent = food.emoji;
+  return el;
+}
+
+function renderPlate(){
+  plate.textContent = '';
+  onPlate.forEach((id, i) => {
+    const el = foodNode(foodById(id));
+    el.addEventListener('pointerdown', e => {
+      if (drag) return;
+      const r = el.getBoundingClientRect();
+      onPlate.splice(i, 1);
+      el.classList.add('gone'); el.style.visibility = 'hidden';
+      startDrag(e, foodById(id), 'plate', r);
+    });
+    plate.appendChild(el);
+  });
+}
+function addToPlate(food){
+  if (onPlate.length >= CFG.plateMax){
+    plate.classList.remove('bump'); void plate.offsetWidth; plate.classList.add('bump');
+    return false;
+  }
+  onPlate.push(food.id); renderPlate(); return true;
+}
+
+/* ---- 戳他 ---- */
+function poke(){
+  if (busy) return;
+  if (!onPlate.length){ talk(); return; }               // 盘子空：聊天
+  if (fullness <= CFG.limit){ eat(false); return; }      // 没饱照常吃；刚饱足时再喂一口，他也还肯
+  force++;
+  if (force < CFG.forceClicks){ say(CFG.lines.refuse[Math.min(force, CFG.lines.refuse.length) - 1]); mode = 'busy'; frame('refuse'); clearTimeout(timer); timer = setTimeout(settle, CFG.refuseMs); return; }
+  force = 0; eat(true);                                  // 硬塞
+}
+
+function eat(forced){
+  busy = true; hush(); spam = 0;
+  streak = (!forced && performance.now() - lastEatEnd < CFG.fastGapMs) ? streak + 1 : 0;
+
+  const first = plate.querySelector('.food:not(.gone)'), r = first.getBoundingClientRect();
+  const food = foodById(onPlate.shift());
+  renderPlate();
+  const fly = foodNode(food); fly.classList.add('held');
+  fly.style.width = r.width + 'px'; fly.style.height = r.height + 'px';
+  fly.style.transform = `translate(${r.left}px,${r.top}px)`;
+  document.body.appendChild(fly);
+  const c = chara.getBoundingClientRect();
+  const mx = c.left + c.width * CFG.mouth.x, my = c.top + c.height * CFG.mouth.y;
+  void fly.offsetWidth;
+  fly.style.transition = 'transform .28s ease-in, opacity .28s ease-in';
+  fly.style.transform = `translate(${mx - r.width/2}px,${my - r.height/2}px) scale(.3)`;
+  fly.style.opacity = '0';
+  setTimeout(() => fly.remove(), 330);
+
+  fullness++;
+  let line = '';
+  if (forced) line = pick('forced');
+  else {
+    const n = eaten[food.id] = (eaten[food.id] || 0) + 1;
+    if (n === 1) line = CFG.lines.first[food.id] || '';
+    else if (n === CFG.lines.sameAfter) line = pick('same');
+  }
+  play(forced ? CFG.forcedEat : CFG.eat, () => {
+    busy = false; lastEatEnd = performance.now();
+    if (streak >= CFG.fastStreak && fullness <= CFG.limit){          // 吃太快：嘴上沾酱，挂一会儿
+      messyUntil = lastEatEnd + CFG.messyMs;
+      clearTimeout(messyTimer);
+      messyTimer = setTimeout(() => { if (mode === 'rest') frame(rest()); }, CFG.messyMs + 30);
+      if (!line) line = pick('fast');
+    }
+    if (!line && !forced && fullness === CFG.limit) line = pick('full');     // 刚吃饱，自己说一声
+    say(line);
+  });
+}
+
+/* ---- 砸他 ---- */
+function throwAt(food, x, y){
+  const c = chara.getBoundingClientRect();
+  const s = foodNode(food); s.className = 'splat';
+  s.style.left = ((x - c.left) / c.width * 100) + '%';
+  s.style.top = ((y - c.top) / c.height * 100) + '%';
+  s.style.setProperty('--t', CFG.splatMs + 'ms');
+  inner.appendChild(s);
+  setTimeout(() => s.remove(), CFG.splatMs + 60);
+  hits++; spam = 0;
+  say(CFG.lines.hit[Math.min(hits, CFG.lines.hit.length) - 1]);
+  clearTimeout(timer); busy = false; mode = 'busy';
+  frame('hit'); timer = setTimeout(settle, CFG.hitMs);
+}
+
+/* ---- 拖 ---- */
+function startDrag(e, food, from, r){
+  e.preventDefault();
+  const el = foodNode(food); el.classList.add('held');
+  el.style.width = r.width + 'px'; el.style.height = r.height + 'px';
+  el.style.fontSize = Math.round(r.width * .62) + 'px';
+  document.body.appendChild(el);
+  drag = { el, food, from, w: r.width, h: r.height, ox: e.clientX - r.left, oy: e.clientY - r.top,
+           sx: e.clientX, sy: e.clientY, id: e.pointerId };
+  moveDrag(e);
+}
+function moveDrag(e){
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.el.style.transform = `translate(${e.clientX - drag.ox}px,${e.clientY - drag.oy}px) scale(1.12)`;
+}
+const inside = (x, y, r, pad) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+
+function endDrag(e, cancelled){
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null; d.el.remove(); renderPlate();
+  const cx = e.clientX - d.ox + d.w / 2, cy = e.clientY - d.oy + d.h / 2;
+  const tap = Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 7;
+  const back = () => { if (d.from === 'plate') addToPlate(d.food); };
+
+  if (cancelled) return back();
+  if (tap) return void addToPlate(d.food);                       // 轻点＝放进盘子
+  if (inside(cx, cy, plate.getBoundingClientRect(), 10)) return void addToPlate(d.food);
+  if (inside(cx, cy, chara.getBoundingClientRect(), 0)) return throwAt(d.food, cx, cy);
+  back();
+}
+addEventListener('pointermove', moveDrag);
+addEventListener('pointerup', e => endDrag(e, false));
+addEventListener('pointercancel', e => endDrag(e, true));
+
+/* ---- 开场 ---- */
+for (const [name, src] of Object.entries(CFG.sprites)){
+  if (!src) continue;
+  const i = new Image(); i.className = 'sp'; i.alt = ''; i.draggable = false; i.src = src;
+  inner.insertBefore(i, mouth); imgs[name] = i;
+}
+CFG.foods.forEach(food => {
+  const b = foodNode(food, 'button'); b.type = 'button';
+  b.setAttribute('aria-label', food.label + '。拖进盘子，或拖到他身上');
+  b.addEventListener('pointerdown', e => { if (!drag) startDrag(e, food, 'tray', b.getBoundingClientRect()); });
+  b.addEventListener('click', e => { if (e.detail === 0) addToPlate(food); });   // 键盘回车
+  tray.appendChild(b);
+});
+chara.addEventListener('click', poke);
+$('#reset').addEventListener('click', () => {
+  clearTimeout(timer); clearTimeout(messyTimer); hush();
+  fullness = 0; force = 0; busy = false; streak = 0; messyUntil = 0; lastEatEnd = -1e9; onPlate.length = 0;
+  spam = 0; hits = 0; eaten = {}; ix = {};
+  inner.querySelectorAll('.splat').forEach(s => s.remove());
+  renderPlate(); settle();
+});
+
+if (CFG.bgImg) stage.style.backgroundImage = `url("${CFG.bgImg}")`;
+if (CFG.plateImg){ plate.classList.add('art'); plate.style.backgroundImage = `url("${CFG.plateImg}")`; }
+mouth.style.left = CFG.mouth.x * 100 + '%'; mouth.style.top = CFG.mouth.y * 100 + '%';
+mouth.hidden = !CFG.debug; debug.hidden = !CFG.debug;
+settle();
+</script>
+</body>
+</html>
